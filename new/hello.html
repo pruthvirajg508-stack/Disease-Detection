@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AI Crop Disease Assistant</title>
+  <style>
+    /* ---------- Base / Layout ---------- */
+    :root{
+      --bg-1: #ecfdf5;
+      --bg-2: #f0fdfa;
+      --card-bg: rgba(255,255,255,0.92);
+      --accent: #10b981;
+      --muted: #6b7280;
+      --glass: rgba(255,255,255,0.6);
+      --success: #059669;
+      --error: #ef4444;
+      --shadow: 0 10px 30px rgba(2,6,23,0.08);
+    }
+
+    * { box-sizing: border-box; }
+    html,body { height:100%; margin:0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+
+    body{
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:28px;
+      background: linear-gradient(135deg,var(--bg-1), var(--bg-2));
+      color:#0f172a;
+    }
+
+    /* Central container */
+    .app-card {
+      width:100%;
+      max-width: 920px;
+      background: var(--card-bg);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(6,95,70,0.04);
+      overflow: hidden;
+    }
+
+    /* Header */
+    .header {
+      text-align:center;
+      margin-bottom: 14px;
+    }
+    .header h1 {
+      margin:0;
+      font-size:1.9rem;
+      color: var(--accent);
+      letter-spacing: -0.02em;
+    }
+    .header p { margin:6px 0 0; color:var(--muted); font-size:0.95rem; }
+
+    /* Controls row */
+    .controls {
+      display:flex;
+      gap:10px;
+      justify-content:center;
+      align-items:center;
+      margin: 16px 0 22px;
+      flex-wrap:wrap;
+    }
+    .select-lang {
+      padding:8px 12px;
+      border-radius:10px;
+      border:1px solid rgba(2,6,23,0.06);
+      background: white;
+      font-weight:600;
+      color:#0f172a;
+    }
+
+    /* Buttons */
+    .btn {
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:10px 14px;
+      border-radius: 10px;
+      border: none;
+      cursor: pointer;
+      font-weight:600;
+      transition: transform .12s ease, box-shadow .12s ease;
+    }
+    .btn:active { transform: translateY(1px); }
+
+    .btn.primary {
+      background: linear-gradient(90deg,#10b981,#059669);
+      color:#fff;
+      box-shadow: 0 6px 20px rgba(5,150,105,0.12);
+    }
+    .btn.secondary {
+      background: linear-gradient(90deg,#06b6d4,#3b82f6);
+      color:#fff;
+    }
+    .btn.ghost {
+      background: transparent;
+      border: 1px dashed rgba(15,23,42,0.06);
+      color: #0f172a;
+    }
+
+    /* Media preview area */
+    .media-grid {
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:16px;
+      align-items:start;
+      margin-bottom:18px;
+    }
+    .preview-box {
+      background: linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0.45));
+      border-radius:12px;
+      padding:12px;
+      border:1px solid rgba(2,6,23,0.04);
+      min-height:200px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      position:relative;
+    }
+    .preview-box video,
+    .preview-box img {
+      width:100%;
+      height:100%;
+      max-height:360px;
+      object-fit:cover;
+      border-radius:8px;
+      display:block;
+    }
+
+    /* Results */
+    .results {
+      margin-top: 12px;
+      border-radius:12px;
+      padding:14px;
+      background: linear-gradient(180deg, rgba(16,185,129,0.03), rgba(16,185,129,0.01));
+      border:1px solid rgba(6,95,70,0.04);
+    }
+    .results h2 {
+      margin:0 0 8px;
+      font-size:1.12rem;
+      color:#064e3b;
+    }
+    .badge {
+      background: rgba(5,150,105,0.12);
+      color: var(--success);
+      padding:6px 10px;
+      border-radius:999px;
+      font-weight:700;
+      font-size:0.95rem;
+      border: 1px solid rgba(5,150,105,0.08);
+    }
+    .pesticide-list { list-style: disc; padding-left: 18px; color:#06323a; margin:0; }
+    .pesticide-list li { margin:6px 0; font-weight:600; }
+
+    /* Error highlighting */
+    .db-error {
+      border:1px dashed rgba(239,68,68,0.18);
+      background: linear-gradient(180deg, rgba(239,68,68,0.03), rgba(239,68,68,0.01));
+      color: var(--error);
+      padding:10px;
+      border-radius:8px;
+      font-weight:700;
+      margin-top:10px;
+    }
+
+    /* Responsive */
+    @media (max-width: 880px){
+      .media-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-card">
+    <div class="header">
+      <h1>🌾 AI Crop Disease Assistant</h1>
+      <p>Upload / capture crop images and get pesticide recommendations</p>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <select id="lang" class="select-lang">
+        <option value="en">English</option>
+        <option value="te">తెలుగు</option>
+      </select>
+      <input type="file" id="fileInput" accept="image/*" class="btn ghost"/>
+      <button class="btn primary" onclick="simulateDetection()">Detect Disease</button>
+    </div>
+
+    <!-- Preview -->
+    <div class="media-grid">
+      <div class="preview-box"><img id="preview" alt="Image preview"></div>
+      <div class="preview-box"><span class="helper">Live Camera (not implemented in demo)</span></div>
+    </div>
+
+    <!-- Results -->
+    <div id="results"></div>
+  </div>
+
+  <script>
+    // disease database with 20 entries (2 faulty)
+    const diseaseDatabase = {
+      "Tomato___Late_blight": {
+        name: { en: "Tomato - Late Blight", te: "టమోటా - ఆలస్య కుళ్ళు" },
+        pesticides: {
+          en: ["Metalaxyl", "Mancozeb", "Copper Oxychloride"],
+          te: ["మెటాలాక్సిల్", "మాంకోజెబ్", "కాపర్ ఆక్సీక్లోరైడ్"]
+        }
+      },
+      "Potato___Early_blight": {
+        name: { en: "Potato - Early Blight", te: "ఆలుగడ్డ - ప్రారంభ కుళ్ళు" },
+        pesticides: {
+          en: ["Azoxystrobin", "Difenoconazole", "Mancozeb"],
+          te: ["అజోక్సిస్ట్రోబిన్", "డైఫెనోకోనజోల్", "మాంకోజెబ్"]
+        }
+      },
+      "Banana___Sigatoka": {
+        name: { en: "Banana - Sigatoka", te: "అరటి - సిగటోకా" },
+        pesticides: {
+          en: ["Mancozeb", "Thiophanate-methyl", "Propiconazole"],
+          te: ["మాంకోజెబ్", "థియోఫానేట్-మిథైల్", "ప్రోపికోనాజోల్"]
+        }
+      },
+      "Rice___Brown_spot": {
+        name: { en: "Rice - Brown Spot", te: "బియ్యం - బ్రౌన్ స్పాట్" },
+        pesticides: {
+          en: ["Carbendazim", "Propiconazole", "Tricyclazole"],
+          te: ["కార్బెండాజిమ్", "ప్రోపికోనాజోల్", "ట్రైసైక్లోజోల్"]
+        }
+      },
+      "Wheat___Rust": {
+        name: { en: "Wheat - Rust", te: "గోధుమ - తుప్పు" },
+        pesticides: {
+          en: ["Mancozeb", "Tebuconazole", "Hexaconazole"],
+          te: ["మాంకోజెబ్", "టెబూకోనాజోల్", "హెక్సాకోనాజోల్"]
+        }
+      },
+      "Cotton___Bollworm": {
+        name: { en: "Cotton - Bollworm", te: "పత్తి - బోల్‌వార్మ్" },
+        pesticides: {
+          en: ["Spinosad", "Chlorantraniliprole", "Emamectin benzoate"],
+          te: ["స్పినోసాడ్", "క్లోరాంట్రానిలిప్రోల్", "ఎమామెక్టిన్ బెంజోయేట్"]
+        }
+      },
+      "Maize___Stem_borer": {
+        name: { en: "Maize - Stem Borer", te: "మొక్కజొన్న - స్టెం బోరర్" },
+        pesticides: {
+          en: ["Carbofuran", "Lambda-cyhalothrin", "Chlorpyrifos"],
+          te: ["కార్బోఫ్యురాన్", "లాంబ్డా-సైహలోత్రిన్", "క్లోర్పిరిఫోస్"]
+        }
+      },
+      "Chilli___Leaf_curl": {
+        name: { en: "Chilli - Leaf Curl", te: "మిర్చి - ఆకు ముడతలు" },
+        pesticides: {
+          en: ["Imidacloprid", "Thiamethoxam", "Acetamiprid"],
+          te: ["ఇమిడాక్లోప్రిడ్", "థియామెథోక్సామ్", "అసెటమిప్రిడ్"]
+        }
+      },
+      "Sugarcane___Red_rot": {
+        name: { en: "Sugarcane - Red Rot", te: "చెరకు - రెడ్ రాట్" },
+        pesticides: {
+          en: ["Carbendazim", "Thiophanate-methyl", "Copper Oxychloride"],
+          te: ["కార్బెండాజిమ్", "థియోఫానేట్-మిథైల్", "కాపర్ ఆక్సీక్లోరైడ్"]
+        }
+      },
+      "Groundnut___Rust": {
+        name: { en: "Groundnut - Rust", te: "వేరుశనగ - తుప్పు" },
+        pesticides: {
+          en: ["Chlorothalonil", "Hexaconazole", "Mancozeb"],
+          te: ["క్లోరోథాలోనిల్", "హెక్సాకోనాజోల్", "మాంకోజెబ్"]
+        }
+      },
+      // --- faulty entry #1 ---
+      "Cauliflower___Downy_mildew": {
+        name: { en: "Cauliflower - Downy Mildew", te: "కాలీఫ్లవర్ - డౌనీ మిల్డ్యూ" },
+        pesticides: {
+          en: ["Metalaxyl", "Cymoxanil"] // Telugu missing (error)
+        }
+      },
+      "Onion___Purple_blotch": {
+        name: { en: "Onion - Purple Blotch", te: "ఉల్లిపాయ - పర్పుల్ బ్లాచ్" },
+        pesticides: {
+          en: ["Mancozeb", "Chlorothalonil", "Iprodione"],
+          te: ["మాంకోజెబ్", "క్లోరోథాలోనిల్", "ఇప్రోడయోన్"]
+        }
+      },
+      "Soybean___Rust": {
+        name: { en: "Soybean - Rust", te: "సోయాబీన్ - తుప్పు" },
+        pesticides: {
+          en: ["Tebuconazole", "Hexaconazole", "Propiconazole"],
+          te: ["టెబూకోనాజోల్", "హెక్సాకోనాజోల్", "ప్రోపికోనాజోల్"]
+        }
+      },
+      "Grapes___Powdery_mildew": {
+        name: { en: "Grapes - Powdery Mildew", te: "ద్రాక్ష - పౌడరీ మిల్డ్యూ" },
+        pesticides: {
+          en: ["Sulphur", "Dinocap", "Tridemorph"],
+          te: ["సల్ఫర్", "డైనోకాప్", "ట్రిడిమార్ఫ్"]
+        }
+      },
+      "Apple___Scab": {
+        name: { en: "Apple - Scab", te: "ఆపిల్ - స్కాబ్" },
+        pesticides: {
+          en: ["Captan", "Mancozeb", "Dodine"],
+          te: ["కాప్టాన్", "మాంకోజెబ్", "డోడిన్"]
+        }
+      },
+      "Mango___Anthracnose": {
+        name: { en: "Mango - Anthracnose", te: "మామిడి - యాన్త్రాక్నోస్" },
+        pesticides: {
+          en: ["Carbendazim", "Copper Oxychloride", "Propineb"],
+          te: ["కార్బెండాజిమ్", "కాపర్ ఆక్సీక్లోరైడ్", "ప్రోపినెబ్"]
+        }
+      },
+      "Pomegranate___Bacterial_blight": {
+        name: { en: "Pomegranate - Bacterial Blight", te: "దానిమ్మ - బ్యాక్టీరియల్ బ్లైట్" },
+        pesticides: {
+          en: ["Streptomycin", "Copper Hydroxide", "Kasugamycin"],
+          te: ["స్ట్రెప్టోమైసిన్", "కాపర్ హైడ్రాక్సైడ్", "కసుగామైసిన్"]
+        }
+      },
+      "Papaya___Powdery_mildew": {
+        name: { en: "Papaya - Powdery Mildew", te: "బొప్పాయి - పౌడరీ మిల్డ్యూ" },
+        pesticides: {
+          en: ["Wettable Sulphur", "Dinocap", "Tridemorph"],
+          te: ["వెట్‌టబుల్ సల్ఫర్", "డైనోకాప్", "ట్రిడిమార్ఫ్"]
+        }
+      },
+      // --- faulty entry #2 ---
+      "Tomato___Bacterial_spot": {
+        name: { en: "Tomato - Bacterial Spot" }, // Telugu name missing
+        pesticides: {
+          en: ["Copper Hydroxide", "Streptomycin", "Mancozeb"],
+          te: ["కాపర్ హైడ్రాక్సైడ్", "స్ట్రెప్టోమైసిన్", "మాంకోజెబ్"]
+        }
+      }
+    };
+
+    // handle file preview
+    const fileInput = document.getElementById("fileInput");
+    const preview = document.getElementById("preview");
+    fileInput.addEventListener("change", e=>{
+      const file = e.target.files[0];
+      if(file){
+        preview.src = URL.createObjectURL(file);
+      }
+    });
+
+    function simulateDetection(){
+      const keys = Object.keys(diseaseDatabase);
+      const randomKey = keys[Math.floor(Math.random()*keys.length)];
+      const disease = diseaseDatabase[randomKey];
+      const lang = document.getElementById("lang").value;
+
+      const resultsDiv = document.getElementById("results");
+      resultsDiv.innerHTML = "";
+
+      if(!disease.name[lang] || !disease.pesticides[lang]){
+        resultsDiv.innerHTML = `<div class="db-error">⚠️ Database entry incomplete for <b>${randomKey}</b></div>`;
+        return;
+      }
+
+      let html = `
+        <div class="results">
+          <h2>${disease.name[lang]}</h2>
+          <span class="badge">${randomKey}</span>
+          <ul class="pesticide-list">
+            ${disease.pesticides[lang].map(p=>`<li>${p}</li>`).join("")}
+          </ul>
+        </div>
+      `;
+      resultsDiv.innerHTML = html;
+    }
+  </script>
+</body>
+</html>
